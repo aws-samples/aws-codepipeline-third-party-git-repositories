@@ -1,8 +1,6 @@
-## My Project
+## aws-codepipeline-third-party-git-repositories
 
-aws-codepipeline-third-party-git-repositories
-
-Sample CloudFormation templates and Lambda Function code for using third-party git repositories with AWS CodePipeline.
+This repository consists ofSample CloudFormation templates and Lambda Function code for using third-party git repositories with AWS CodePipeline.
 
 ## Security
 
