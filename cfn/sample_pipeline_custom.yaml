@@ -1,0 +1,296 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 3rd party git integration with CodePipeline
+Metadata:
+  LICENSE: >-
+    Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy of this
+    software and associated documentation files (the "Software"), to deal in the Software
+    without restriction, including without limitation the rights to use, copy, modify,
+    merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+    INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+    PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+Parameters:
+  Branch:
+    Description: 'Git branch to pull.'
+    Type: String
+    Default: ''
+  GitUrl:
+    Description: URL for git pull
+    Type: String
+  SourceActionVersion:
+    Description: The version of the custom source action to use.
+    Type: String
+    Default: '2'
+  SourceActionProvider:
+    Description: The provider name of the custom source action.
+    Type: String
+    Default: 'CustomSourceForGit'
+  CodePipelineName:
+    Description: Name for CodePipeline.
+    Type: String
+    Default: thirdpartygitsource
+  SecretsManagerArnForSSHPrivateKey:
+    Description: SSH Private Key for Git Repo Access that was added in the AWS Secrets Manager.
+    Type: String
+    NoEcho: 'true'
+  GitWebHookIpAddress:
+    Description: Git WebHook source IP address.
+    Type: String
+
+Resources:
+  CodeBuildRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+
+  CodeBuildPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      Description: Policy with base permissions for CodeBuild
+      Path: /
+      Roles:
+        - !Ref CodeBuildRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "logs:CreateLogGroup"
+              - "logs:PutLogEvents"
+              - "logs:CreateLogStream"
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:GetBucketVersioning'
+              - 's3:PutObject'
+              - "s3:GetBucketAcl"
+              - "s3:GetBucketLocation"
+            Resource:
+              - !GetAtt ArtifactStoreBucket.Arn
+              - !Sub "${ArtifactStoreBucket.Arn}/*"
+          - Effect: Allow
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: !GetAtt KMSKey.Arn
+          - Effect: Allow  #For allowing CodeBuild to Access Secrets Manager to retrieve Private SSH key. If a custom KMS key is used, please add the ARN in the Resource section
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/secretsmanager"
+
+  CodeBuild:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/java:openjdk-8
+        Type: LINUX_CONTAINER
+      ServiceRole: !Ref CodeBuildRole
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+              version: 0.2
+              phases:
+                install:
+                    runtime-versions:
+                        python: 3.7
+                    # commands:
+                    # - pip3 install boto3
+                build:
+                    commands:
+                    - ls -al
+
+  PipelineRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+
+  CodePipelinePolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      Description: Policy with base permissions for CodePipeline
+      Path: /
+      Roles:
+        - !Ref PipelineRole
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action:
+            - 's3:GetObject'
+            - 's3:GetObjectVersion'
+            - 's3:GetBucketVersioning'
+            - 's3:PutObject'
+            - "s3:GetBucketAcl"
+            - "s3:GetBucketLocation"
+          Resource:
+            - !GetAtt ArtifactStoreBucket.Arn
+            - !Sub "${ArtifactStoreBucket.Arn}/*"
+          Effect: Allow
+        - Action:
+            - 'iam:PassRole'
+          Resource: '*'
+          Effect: Allow
+        - Action:
+            - 'codebuild:BatchGetBuilds'
+            - 'codebuild:StartBuild'
+          Resource: '*'
+          Effect: Allow
+        - Action:
+          - 'kms:Encrypt'
+          - 'kms:Decrypt'
+          - 'kms:ReEncrypt*'
+          - 'kms:GenerateDataKey*'
+          - 'kms:DescribeKey'
+          Resource: !GetAtt KMSKey.Arn
+          Effect: Allow
+        - Action:
+            - 'secretsmanager:GetSecretValue'
+          Resource: !Ref SecretsManagerArnForSSHPrivateKey
+          Effect: Allow
+        Version: 2012-10-17
+
+  Pipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactStoreBucket
+        EncryptionKey:
+          Id: !GetAtt KMSKey.Arn
+          Type: KMS
+      Name: !Ref CodePipelineName
+      RoleArn: !GetAtt PipelineRole.Arn
+      Stages:
+        - Name: 'Source'
+          Actions:
+            - Name: 'Source'
+              ActionTypeId:
+                Category: 'Source'
+                Owner: 'Custom'
+                Version: !Ref SourceActionVersion
+                Provider: !Ref SourceActionProvider
+              OutputArtifacts:
+                - Name: MyApp
+              Configuration:
+                Branch: !Ref Branch
+                GitUrl: !Ref GitUrl
+                PipelineName: !Ref CodePipelineName
+                SSHSecretKeyName: !Ref SecretsManagerArnForSSHPrivateKey
+              RunOrder: 1
+        - Name: 'Build'
+          Actions:
+            - Name: 'CodeBuild'
+              ActionTypeId:
+                Category: 'Build'
+                Owner: 'AWS'
+                Version: '1'
+                Provider: 'CodeBuild'
+              InputArtifacts:
+                - Name: MyApp
+              OutputArtifacts:
+                - Name: MyAppBuilt
+              Configuration:
+                ProjectName: !Ref CodeBuild
+              RunOrder: 1
+
+  PipelineWebhook:
+    Type: "AWS::CodePipeline::Webhook"
+    Properties:
+      TargetPipeline: !Ref Pipeline
+      TargetPipelineVersion: 1
+      TargetAction: Source
+      Filters:
+        - JsonPath: '$.ref'
+          MatchEquals: 'refs/heads/{Branch}'
+      Authentication: IP
+      AuthenticationConfiguration:
+        AllowedIPRange: !Ref GitWebHookIpAddress
+      RegisterWithThirdParty: false
+
+  ArtifactStoreBucket:
+    DeletionPolicy: Retain
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+
+  KMSKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: 'git CodePipeline integration, bucket to store ssh keys'
+      KeyPolicy:
+        Version: 2012-10-17
+        Statement:
+          - Sid: Allow access for Key Administrators
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Join
+                  - ''
+                  - - 'arn:aws:iam::'
+                    - !Ref 'AWS::AccountId'
+                    - ':root'
+            Action:
+              - 'kms:Create*'
+              - 'kms:Describe*'
+              - 'kms:Enable*'
+              - 'kms:List*'
+              - 'kms:Put*'
+              - 'kms:Update*'
+              - 'kms:Revoke*'
+              - 'kms:Disable*'
+              - 'kms:Get*'
+              - 'kms:Delete*'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:CancelKeyDeletion'
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt CodeBuildRole.Arn
+                - !GetAtt PipelineRole.Arn
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+
+Outputs:
+  CodePipelineWebHookUrl:
+    Value: !GetAtt PipelineWebhook.Url
