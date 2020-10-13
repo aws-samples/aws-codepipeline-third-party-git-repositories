@@ -1,11 +1,8 @@
 ## My Project
 
-TODO: Fill this README out!
+aws-codepipeline-third-party-git-repositories
 
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+Sample CloudFormation templates and Lambda Function code for using third-party git repositories with AWS CodePipeline.
 
 ## Security
 
@@ -14,4 +11,3 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
-
