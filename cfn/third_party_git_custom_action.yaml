@@ -35,9 +35,11 @@ Parameters:
   LambdaCodeS3Bucket:
     Description: S3 bucket name for Lambda code for 3rd party git integration
     Type: String
+    Default: aws-codepipeline-third-party-git-repositories-sample
   LambdaCodeS3Key:
     Description: s3 location of the Lambda code for 3rd party git integration
     Type: String
+    Default: 'lambda/lambda.zip'
 
 Resources:
   GitPullCodeBuild:

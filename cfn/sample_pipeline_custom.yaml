@@ -27,7 +27,7 @@ Parameters:
   SourceActionVersion:
     Description: The version of the custom source action to use.
     Type: String
-    Default: '2'
+    Default: '1'
   SourceActionProvider:
     Description: The provider name of the custom source action.
     Type: String
@@ -35,7 +35,7 @@ Parameters:
   CodePipelineName:
     Description: Name for CodePipeline.
     Type: String
-    Default: thirdpartygitsource
+    Default: thirdpartygitsource-sample
   SecretsManagerArnForSSHPrivateKey:
     Description: SSH Private Key for Git Repo Access that was added in the AWS Secrets Manager.
     Type: String
