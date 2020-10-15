@@ -24,7 +24,7 @@ Parameters:
   SourceActionProvider:
     Description: The provider name of the custom source action.
     Type: String
-    Default: 'CustomSourceForTF'
+    Default: 'CustomSourceForGit'
   GitPullLambdaSubnet:
     Description: The subnet that the git pull Lambda function  and CodeBuild will be deployed in. This should be a private subnet with a NAT gateway and your source control should be accessible from this subnet.
     Type: 'List<AWS::EC2::Subnet::Id>'
