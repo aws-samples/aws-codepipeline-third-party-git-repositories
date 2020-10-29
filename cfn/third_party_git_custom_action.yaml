@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Resources to be created to manage team pipelines"
+Description: "Use AWS CodePipeline with third-party git repositories"
 Metadata:
   LICENSE: >-
     Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -292,7 +292,7 @@ Resources:
                       Action:
                         - "logs:CreateLogStream"
                         - "logs:PutLogEvents"
-                      Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/TeamForge-CodePipeline-Source-${AWS::AccountId}:*"
+                      Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
                     - Effect: Allow
                       Action:
                         - codepipeline:PollForJobs
